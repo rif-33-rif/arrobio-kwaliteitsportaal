@@ -1,0 +1,26 @@
+# Fly.io configuratie. Pas 'app' aan als deze naam al bezet is
+# (flyctl launch vertelt dit en kan het automatisch voor je aanpassen).
+app = "arrobio-kwaliteitsportaal"
+primary_region = "ams"
+
+[build]
+
+[env]
+  PORT = "4000"
+
+[[mounts]]
+  source = "arro_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 4000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+[[vm]]
+  memory = "512mb"
+  cpu_kind = "shared"
+  cpus = 1

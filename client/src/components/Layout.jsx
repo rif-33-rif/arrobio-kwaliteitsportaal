@@ -19,6 +19,7 @@ export default function Layout() {
   const links = [
     { to: '/', label: 'Dashboard', end: true },
     { to: '/woningen', label: 'Woningen' },
+    { to: '/opnames', label: 'Opnames' },
     { to: '/materiaal', label: 'Materiaal' },
     ...(['beheerder', 'manager'].includes(user?.role) ? [{ to: '/managementrapportage', label: 'Managementrapportage' }] : []),
     ...(['beheerder', 'manager', 'controleur'].includes(user?.role) ? [{ to: '/verbeterplan', label: 'Verbeterplan' }] : []),

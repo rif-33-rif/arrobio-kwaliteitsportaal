@@ -246,3 +246,39 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--lime); outl
   .app-content { padding: 1rem; }
   .data-table { display: block; overflow-x: auto; white-space: nowrap; }
 }
+
+/* ---------- Woningopname ---------- */
+.badge-done { background: #dff0e0; color: var(--lime-dark); }
+.opname-link { display: block; color: inherit; text-decoration: none; }
+.product-inactive { opacity: 0.55; }
+.btn-anchor { display: inline-block; text-decoration: none; }
+
+.share-bar { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.75rem 0; }
+.share-bar > * { margin-right: 0; }
+
+.room-bar { display: flex; gap: 0.4rem; overflow-x: auto; padding-bottom: 0.4rem; -webkit-overflow-scrolling: touch; }
+.room-pill { white-space: nowrap; padding: 0.55rem 0.9rem; font-size: 0.9rem; flex-shrink: 0; }
+.room-count { display: inline-block; margin-left: 0.4rem; min-width: 1.3rem; padding: 0 0.35rem; border-radius: 999px; background: var(--lime); color: white; font-size: 0.72rem; font-weight: 700; text-align: center; }
+
+.opname-list { list-style: none; padding: 0; margin: 0 0 1rem; display: flex; flex-direction: column; gap: 0.4rem; }
+.opname-row { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; padding: 0.5rem 0.75rem; }
+.opname-row.filled { border-color: var(--lime); background: #f1f8f1; }
+.opname-desc { flex: 1; font-size: 0.92rem; line-height: 1.3; }
+
+.qty { display: flex; align-items: center; gap: 0.3rem; flex-shrink: 0; }
+.qty-btn { width: 2.5rem; height: 2.5rem; border: 1px solid var(--border); background: white; border-radius: 8px; font-size: 1.3rem; line-height: 1; cursor: pointer; color: var(--text); }
+.qty-btn:disabled { opacity: 0.35; cursor: default; }
+.qty-btn:not(:disabled):active { background: var(--border); }
+.qty-input { width: 3.2rem; height: 2.5rem; text-align: center; font-size: 1.05rem; font-weight: 600; padding: 0.2rem; }
+
+.table-scroll { overflow-x: auto; }
+.summary-table { display: table; white-space: normal; }
+.summary-table th.num, .summary-table td.num { text-align: center; }
+
+@media (max-width: 340px) {
+  .opname-row { flex-direction: column; align-items: stretch; }
+  .qty { justify-content: flex-end; }
+}
+
+/* Voorkom dat brede inhoud (ruimte-balk, tabellen) de hele pagina breder maakt dan het scherm. */
+.app-content { min-width: 0; }

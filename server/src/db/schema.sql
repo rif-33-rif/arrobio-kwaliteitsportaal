@@ -309,3 +309,41 @@ INSERT OR IGNORE INTO roles (code, name) VALUES
   ('controleur', 'Controleur'),
   ('monteur', 'Monteur'),
   ('leerling', 'Leerling');
+
+-- Woningopname: een monteur loopt een woning door en legt per ruimte vast welke
+-- standaardregels (en hoeveel) nodig zijn. Vervangt het papieren opnameformulier.
+CREATE TABLE IF NOT EXISTS opname_products (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  description TEXT NOT NULL,
+  unit TEXT NOT NULL DEFAULT 'p/st',
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS opnames (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  project TEXT NOT NULL,
+  address TEXT NOT NULL,
+  datum TEXT NOT NULL DEFAULT (date('now')),
+  planning TEXT,
+  notities TEXT,
+  status TEXT NOT NULL DEFAULT 'concept' CHECK (status IN ('concept', 'afgerond')),
+  created_by INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- product_id is NULL voor een losse "extra regel" die ter plekke is toegevoegd;
+-- die draagt dan zelf description/unit.
+CREATE TABLE IF NOT EXISTS opname_lines (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  opname_id INTEGER NOT NULL REFERENCES opnames(id) ON DELETE CASCADE,
+  product_id INTEGER REFERENCES opname_products(id),
+  description TEXT,
+  unit TEXT,
+  room TEXT NOT NULL,
+  aantal REAL NOT NULL,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_opname_lines_opname ON opname_lines(opname_id);

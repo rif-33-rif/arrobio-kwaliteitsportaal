@@ -24,6 +24,7 @@ import reportRoutes from './routes/reports.js';
 import materialRoutes from './routes/materials.js';
 import workItemMaterialRoutes from './routes/workItemMaterials.js';
 import workItemCatalogRoutes from './routes/workItemCatalog.js';
+import opnameRoutes from './routes/opnames.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // In productie draait de gebouwde React-app mee in hetzelfde proces (één service
@@ -56,6 +57,7 @@ export function createApp() {
   app.use('/api/reports', reportRoutes);
   app.use('/api/materials', materialRoutes);
   app.use('/api/work-item-catalog', workItemCatalogRoutes);
+  app.use('/api/opnames', opnameRoutes);
   app.use('/api/properties/:propertyId/work-items/:itemId/materials', workItemMaterialRoutes);
   app.use('/api/properties/:propertyId/work-items', workItemRoutes);
   app.use('/api/properties/:propertyId/measurements', measurementRoutes);

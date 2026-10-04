@@ -2,6 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { DEFAULT_OPNAME_PRODUCTS } from './opnameDefaults.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const dbPath = process.env.DB_PATH || path.join(__dirname, '..', '..', 'data.sqlite');
@@ -35,6 +36,12 @@ if (!userColumns.includes('mfa_secret')) {
 }
 if (!userColumns.includes('mfa_enabled')) {
   db.exec('ALTER TABLE users ADD COLUMN mfa_enabled INTEGER NOT NULL DEFAULT 0');
+}
+
+// Eerste keer: vul de opnamelijst met de regels van het papieren formulier.
+if (db.prepare('SELECT COUNT(*) AS c FROM opname_products').get().c === 0) {
+  const insert = db.prepare('INSERT INTO opname_products (description, unit, sort_order) VALUES (?, ?, ?)');
+  DEFAULT_OPNAME_PRODUCTS.forEach(([description, unit], i) => insert.run(description, unit, (i + 1) * 10));
 }
 
 export default db;

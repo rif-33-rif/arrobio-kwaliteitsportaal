@@ -13,6 +13,8 @@ import ImprovementPlan from './pages/ImprovementPlan.jsx';
 import Account from './pages/Account.jsx';
 import Materials from './pages/Materials.jsx';
 import CatalogAdmin from './pages/CatalogAdmin.jsx';
+import Opnames from './pages/Opnames.jsx';
+import OpnameDetail from './pages/OpnameDetail.jsx';
 
 function ProtectedRoute({ children, roles }) {
   const { user } = useAuth();
@@ -38,6 +40,8 @@ export default function App() {
         <Route index element={<Dashboard />} />
         <Route path="woningen" element={<Properties />} />
         <Route path="woningen/:id" element={<PropertyDetail />} />
+        <Route path="opnames" element={<Opnames />} />
+        <Route path="opnames/:id" element={<OpnameDetail />} />
         <Route path="materiaal" element={<Materials />} />
         <Route path="gebruikers" element={<ProtectedRoute roles={['beheerder']}><Users /></ProtectedRoute>} />
         <Route path="checklists" element={<ProtectedRoute roles={['beheerder']}><ChecklistAdmin /></ProtectedRoute>} />

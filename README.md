@@ -55,6 +55,8 @@ Een gebruiker die als uitvoerder op een werkitem staat, mag nooit zelf de techni
 - [x] **Uitbreiding: materiaalbeheer** — materiaalcatalogus met voorraadbewaking en minimumvoorraad-signalering, materiaalverbruik registreren per werkzaamheid (voorraad daalt automatisch, traceerbaar in het PDF-opleverrapport), plus een **werkzaamhedencatalogus** (normkostenlijst) met Excel-import zodat monteurs standaardregels kunnen zoeken/selecteren in plaats van alles handmatig te typen (42 tests)
 - [x] **Uitbreiding: productie-hosting** — Dockerfile + `fly.toml` voor Fly.io (één service, permanent volume voor database + foto's, automatische HTTPS), backend serveert de gebouwde frontend uit dezelfde container, lokaal geverifieerd
 
+- [x] **Uitbreiding: woningopname** — digitale versie van het papieren opnameformulier "Electra": per woning (project + adres) per ruimte aantallen invullen bij de standaardregels (menu "Opnames"), losse extra regels toevoegen, overzicht per regel × ruimte, en delen via het deelmenu van de telefoon (PDF + tekst), WhatsApp, e-mail of kopiëren. Afronden vergrendelt de opname tot heropenen. De standaardregels (`opname_products`) worden bij de eerste start uit het formulier gevuld en zijn te beheren door Beheerder/Manager ("Opnamelijst beheren"). Backend: `server/src/routes/opnames.js`; ruimtes staan in `server/src/db/opnameDefaults.js`.
+
 ## Installatie (ontwikkelomgeving)
 
 Vereist: Node.js 18+ (geen extra database-server nodig — SQLite zit in Node zelf).

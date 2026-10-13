@@ -1,9 +1,16 @@
 import { Router } from 'express';
 import PDFDocument from 'pdfkit';
+import ExcelJS from 'exceljs';
+import multer from 'multer';
+import fs from 'node:fs';
+import path from 'node:path';
 import db from '../db/index.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { logAudit } from '../lib/audit.js';
 import { OPNAME_ROOMS } from '../db/opnameDefaults.js';
+import { templatePath, templateExists, parseTemplate, reconcileProducts, fillTemplate } from '../lib/opnameTemplate.js';
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 
 const router = Router();
 router.use(requireAuth);
@@ -46,7 +53,7 @@ function touch(id) {
 function loadLines(opnameId) {
   return db
     .prepare(
-      `SELECT l.id, l.product_id, l.room, l.aantal,
+      `SELECT l.id, l.product_id, l.room, l.aantal, l.remark,
               COALESCE(p.description, l.description) AS description,
               COALESCE(p.unit, l.unit) AS unit,
               p.sort_order
@@ -93,6 +100,40 @@ router.put('/products/:productId', requireRole('beheerder', 'manager'), (req, re
 
 // Ruimtelijst voor de frontend, zodat de lijst op één plek (de server) staat.
 router.get('/rooms', (req, res) => res.json(OPNAME_ROOMS));
+
+// ---------- Excel-sjabloon van de opdrachtgever ----------
+
+router.get('/template', (req, res) => {
+  const exists = templateExists();
+  res.json({
+    exists,
+    uploaded_at: exists ? fs.statSync(templatePath()).mtime.toISOString() : null,
+    linked_products: db.prepare('SELECT COUNT(*) AS c FROM opname_products WHERE template_row IS NOT NULL AND active = 1').get().c,
+  });
+});
+
+router.post('/template', requireRole('beheerder', 'manager'), upload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Geen bestand ontvangen' });
+  if (!/\.xlsx$/i.test(req.file.originalname)) return res.status(400).json({ error: 'Alleen .xlsx-bestanden zijn toegestaan' });
+
+  let items;
+  try {
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(req.file.buffer);
+    items = parseTemplate(workbook);
+  } catch (err) {
+    return res.status(400).json({ error: `Het bestand kon niet worden gelezen: ${err.message}` });
+  }
+  if (!items.length) {
+    return res.status(400).json({ error: 'Geen elektraregels gevonden. Verwacht een sectie "Electra" met ruimtekolommen vanaf kolom E.' });
+  }
+
+  fs.mkdirSync(path.dirname(templatePath()), { recursive: true });
+  fs.writeFileSync(templatePath(), req.file.buffer);
+  const stats = reconcileProducts(db, items);
+  logAudit({ userId: req.user.id, action: 'OPNAME_SJABLOON_GEUPLOAD', details: { filename: req.file.originalname, rows: items.length, ...stats } });
+  res.json({ rows: items.length, ...stats });
+});
 
 // ---------- Opnames ----------
 
@@ -185,23 +226,27 @@ router.put('/:id/lines', (req, res) => {
   if (!opname || !ensureEditable(opname, res)) return;
 
   const { product_id, room } = req.body;
-  const aantal = Number(req.body.aantal);
   if (!ROOM_KEYS.has(room)) return res.status(400).json({ error: 'Onbekende ruimte' });
-  if (!Number.isFinite(aantal) || aantal < 0 || aantal > 100000) return res.status(400).json({ error: 'Ongeldig aantal' });
   if (!db.prepare('SELECT 1 FROM opname_products WHERE id = ?').get(product_id)) {
     return res.status(400).json({ error: 'Onbekend product' });
   }
 
   const existing = db
-    .prepare('SELECT id FROM opname_lines WHERE opname_id = ? AND product_id = ? AND room = ?')
+    .prepare('SELECT id, aantal, remark FROM opname_lines WHERE opname_id = ? AND product_id = ? AND room = ?')
     .get(opname.id, product_id, room);
+  // Zonder `aantal` in het verzoek blijft het aantal staan (nodig om alleen een opmerking te wijzigen).
+  const aantal = req.body.aantal === undefined ? existing?.aantal : Number(req.body.aantal);
+  if (aantal === undefined) return res.status(400).json({ error: 'Aantal ontbreekt' });
+  if (!Number.isFinite(aantal) || aantal < 0 || aantal > 100000) return res.status(400).json({ error: 'Ongeldig aantal' });
+  const remark = req.body.remark === undefined ? (existing?.remark ?? null) : String(req.body.remark).trim().slice(0, 300) || null;
+
   if (aantal === 0) {
     if (existing) db.prepare('DELETE FROM opname_lines WHERE id = ?').run(existing.id);
   } else if (existing) {
-    db.prepare("UPDATE opname_lines SET aantal = ?, updated_at = datetime('now') WHERE id = ?").run(aantal, existing.id);
+    db.prepare("UPDATE opname_lines SET aantal = ?, remark = ?, updated_at = datetime('now') WHERE id = ?").run(aantal, remark, existing.id);
   } else {
-    db.prepare('INSERT INTO opname_lines (opname_id, product_id, room, aantal) VALUES (?, ?, ?, ?)').run(
-      opname.id, product_id, room, aantal
+    db.prepare('INSERT INTO opname_lines (opname_id, product_id, room, aantal, remark) VALUES (?, ?, ?, ?, ?)').run(
+      opname.id, product_id, room, aantal, remark
     );
   }
   touch(opname.id);
@@ -220,9 +265,10 @@ router.post('/:id/extra-lines', (req, res) => {
   if (!ROOM_KEYS.has(req.body.room)) return res.status(400).json({ error: 'Onbekende ruimte' });
   if (!Number.isFinite(aantal) || aantal <= 0 || aantal > 100000) return res.status(400).json({ error: 'Ongeldig aantal' });
 
+  const remark = String(req.body.remark || '').trim().slice(0, 300) || null;
   const result = db
-    .prepare('INSERT INTO opname_lines (opname_id, room, aantal, description, unit) VALUES (?, ?, ?, ?, ?)')
-    .run(opname.id, req.body.room, aantal, description, unit);
+    .prepare('INSERT INTO opname_lines (opname_id, room, aantal, description, unit, remark) VALUES (?, ?, ?, ?, ?, ?)')
+    .run(opname.id, req.body.room, aantal, description, unit, remark);
   touch(opname.id);
   res.status(201).json({ id: result.lastInsertRowid });
 });
@@ -234,12 +280,126 @@ router.put('/:id/extra-lines/:lineId', (req, res) => {
     .prepare('SELECT * FROM opname_lines WHERE id = ? AND opname_id = ? AND product_id IS NULL')
     .get(req.params.lineId, opname.id);
   if (!line) return res.status(404).json({ error: 'Regel niet gevonden' });
-  const aantal = Number(req.body.aantal);
+  const aantal = req.body.aantal === undefined ? line.aantal : Number(req.body.aantal);
   if (!Number.isFinite(aantal) || aantal < 0 || aantal > 100000) return res.status(400).json({ error: 'Ongeldig aantal' });
+  const remark = req.body.remark === undefined ? line.remark : String(req.body.remark).trim().slice(0, 300) || null;
   if (aantal === 0) db.prepare('DELETE FROM opname_lines WHERE id = ?').run(line.id);
-  else db.prepare("UPDATE opname_lines SET aantal = ?, updated_at = datetime('now') WHERE id = ?").run(aantal, line.id);
+  else db.prepare("UPDATE opname_lines SET aantal = ?, remark = ?, updated_at = datetime('now') WHERE id = ?").run(aantal, remark, line.id);
   touch(opname.id);
   res.json({ ok: true });
+});
+
+// ---------- Excel om te delen ----------
+
+// Is het Excel-sjabloon van de opdrachtgever geüpload, dan krijgt de gebruiker hun eigen bestand
+// ingevuld terug (hun formules rekenen de prijzen uit). Anders valt dit terug op een eigen,
+// simpele indeling: alle regels als rijen (ook lege) en alle ruimtes als kolommen.
+router.get('/:id/xlsx', async (req, res) => {
+  const opname = loadOpname(req, res);
+  if (!opname) return;
+  const lines = loadLines(opname.id);
+
+  const downloadName = `opname-${opname.address}`.replace(/[^a-zA-Z0-9-]+/g, '-').replace(/-+/g, '-').toLowerCase();
+  const sendWorkbook = async (workbook) => {
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${downloadName}.xlsx"`);
+    await workbook.xlsx.write(res);
+    res.end();
+    logAudit({ userId: req.user.id, action: 'OPNAME_EXCEL_GEMAAKT', details: { opnameId: opname.id, sjabloon: templateExists() } });
+  };
+
+  if (templateExists()) {
+    const allProducts = db.prepare('SELECT * FROM opname_products').all();
+    return sendWorkbook(await fillTemplate({ opname, lines, products: allProducts }));
+  }
+
+  const usedProductIds = new Set(lines.filter((l) => l.product_id).map((l) => l.product_id));
+  const products = db
+    .prepare('SELECT * FROM opname_products ORDER BY sort_order, id')
+    .all()
+    .filter((p) => p.active || usedProductIds.has(p.id));
+
+  const qty = new Map(); // `${product_id}|${room}` -> aantal
+  for (const l of lines.filter((x) => x.product_id)) qty.set(`${l.product_id}|${l.room}`, l.aantal);
+
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'Arrobio Kwaliteitsportaal';
+  const ws = wb.addWorksheet('Opname');
+
+  const info = [
+    ['Project', opname.project],
+    ['Adres', opname.address],
+    ['Planning', opname.planning || ''],
+    ['Datum', opname.datum],
+    ['Opmerkingen', opname.notities || ''],
+  ];
+  info.forEach(([k, v], i) => {
+    ws.getCell(i + 1, 1).value = k;
+    ws.getCell(i + 1, 1).font = { bold: true };
+    ws.getCell(i + 1, 2).value = v;
+  });
+
+  const headerRow = info.length + 2;
+  const headers = ['Omschrijving', 'Eenheid', ...OPNAME_ROOMS.map((r) => r.short), 'Totaal'];
+  headers.forEach((h, i) => {
+    const c = ws.getCell(headerRow, i + 1);
+    c.value = h;
+    c.font = { bold: true };
+    c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEAF0EC' } };
+    c.alignment = { horizontal: i < 2 ? 'left' : 'center' };
+  });
+
+  let rowNo = headerRow + 1;
+  const writeRow = (description, unit, byRoom) => {
+    ws.getCell(rowNo, 1).value = description;
+    ws.getCell(rowNo, 2).value = unit;
+    let total = 0;
+    OPNAME_ROOMS.forEach((r, i) => {
+      const v = byRoom[r.key];
+      if (v) {
+        const c = ws.getCell(rowNo, i + 3);
+        c.value = v;
+        c.alignment = { horizontal: 'center' };
+        total += v;
+      }
+    });
+    if (total) {
+      const c = ws.getCell(rowNo, OPNAME_ROOMS.length + 3);
+      c.value = Math.round(total * 100) / 100;
+      c.font = { bold: true };
+      c.alignment = { horizontal: 'center' };
+    }
+    rowNo += 1;
+  };
+
+  for (const p of products) {
+    const byRoom = {};
+    for (const r of OPNAME_ROOMS) byRoom[r.key] = qty.get(`${p.id}|${r.key}`) || 0;
+    writeRow(p.description, p.unit, byRoom);
+  }
+
+  // Losse extra regels onderaan, gegroepeerd per omschrijving.
+  const extras = new Map();
+  for (const l of lines.filter((x) => !x.product_id)) {
+    const key = `${l.description}|${l.unit}`;
+    if (!extras.has(key)) extras.set(key, { description: l.description, unit: l.unit, byRoom: {} });
+    const e = extras.get(key);
+    e.byRoom[l.room] = (e.byRoom[l.room] || 0) + l.aantal;
+  }
+  if (extras.size) {
+    rowNo += 1;
+    ws.getCell(rowNo, 1).value = 'Extra regels (niet op de standaardlijst)';
+    ws.getCell(rowNo, 1).font = { bold: true };
+    rowNo += 1;
+    for (const e of extras.values()) writeRow(e.description, e.unit, e.byRoom);
+  }
+
+  ws.getColumn(1).width = 58;
+  ws.getColumn(2).width = 10;
+  for (let i = 3; i <= OPNAME_ROOMS.length + 3; i++) ws.getColumn(i).width = 8;
+  ws.views = [{ state: 'frozen', xSplit: 2, ySplit: headerRow }];
+
+  await sendWorkbook(wb);
 });
 
 // ---------- PDF om te delen ----------

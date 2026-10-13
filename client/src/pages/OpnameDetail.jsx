@@ -37,6 +37,22 @@ function Qty({ value, disabled, onChange }) {
   );
 }
 
+// Opmerking bij een ingevulde regel (bijv. "tbv intercom"); wordt bij verlaten van het veld opgeslagen.
+function RemarkInput({ line, disabled, onSave }) {
+  return (
+    <input
+      key={`${line.id}-${line.remark || ''}`}
+      className="remark-input"
+      placeholder="Opmerking (bijv. tbv intercom)"
+      defaultValue={line.remark || ''}
+      disabled={disabled}
+      maxLength={300}
+      onBlur={(e) => onSave(line, e.target.value)}
+      onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+    />
+  );
+}
+
 export default function OpnameDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -84,13 +100,28 @@ export default function OpnameDetail() {
     setError('');
     const previous = lines;
     setLines((cur) => {
-      const rest = cur.filter((l) => !(l.product_id === productId && l.room === r));
+      const prev = cur.find((l) => l.product_id === productId && l.room === r);
+      const rest = cur.filter((l) => l !== prev);
       if (!aantal) return rest;
       const p = allProducts.find((x) => x.id === productId);
-      return [...rest, { id: `tmp-${productId}-${r}`, product_id: productId, room: r, aantal, description: p.description, unit: p.unit, sort_order: p.sort_order }];
+      return [...rest, { id: `tmp-${productId}-${r}`, product_id: productId, room: r, aantal, remark: prev?.remark ?? null, description: p.description, unit: p.unit, sort_order: p.sort_order }];
     });
     try {
       await api.put(`/opnames/${id}/lines`, { product_id: productId, room: r, aantal });
+    } catch (err) {
+      setLines(previous);
+      setError(`Niet opgeslagen: ${err.message}`);
+    }
+  }
+
+  async function setRemark(line, remark) {
+    if ((line.remark || '') === remark.trim()) return;
+    setError('');
+    const previous = lines;
+    setLines((cur) => cur.map((l) => (l === line ? { ...l, remark: remark.trim() || null } : l)));
+    try {
+      if (line.product_id) await api.put(`/opnames/${id}/lines`, { product_id: line.product_id, room: line.room, remark });
+      else await api.put(`/opnames/${id}/extra-lines/${line.id}`, { remark });
     } catch (err) {
       setLines(previous);
       setError(`Niet opgeslagen: ${err.message}`);
@@ -152,7 +183,7 @@ export default function OpnameDetail() {
       const inRoom = lines.filter((l) => l.room === r.key).sort((a, b) => (a.sort_order ?? 1e9) - (b.sort_order ?? 1e9));
       if (!inRoom.length) continue;
       out.push('', r.label.toUpperCase());
-      for (const l of inRoom) out.push(`- ${l.description}: ${fmt(l.aantal)} ${l.unit}`);
+      for (const l of inRoom) out.push(`- ${l.description}: ${fmt(l.aantal)} ${l.unit}${l.remark ? ` (${l.remark})` : ''}`);
     }
     if (!lines.length) out.push('', 'Nog geen regels ingevuld.');
     return out.join('\n');
@@ -160,30 +191,30 @@ export default function OpnameDetail() {
 
   const shareTitle = opname ? `Opname ${opname.address}` : 'Opname';
 
-  async function fetchPdfFile() {
+  async function fetchFile(kind) {
     const token = localStorage.getItem('arro_token');
-    const res = await fetch(`/api/opnames/${id}/pdf`, { headers: { Authorization: `Bearer ${token}` } });
-    if (!res.ok) throw new Error('PDF maken mislukt');
+    const res = await fetch(`/api/opnames/${id}/${kind}`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) throw new Error('Bestand maken mislukt');
     const blob = await res.blob();
-    const name = `opname-${opname.address}`.replace(/[^a-zA-Z0-9-]+/g, '-').replace(/-+/g, '-').toLowerCase() + '.pdf';
-    return new File([blob], name, { type: 'application/pdf' });
+    const base = `opname-${opname.address}`.replace(/[^a-zA-Z0-9-]+/g, '-').replace(/-+/g, '-').toLowerCase();
+    const type = kind === 'xlsx' ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'application/pdf';
+    return new File([blob], `${base}.${kind}`, { type });
   }
 
+  // Deelt Excel + PDF als de telefoon dat kan, anders alleen Excel, anders alleen de tekst.
   async function handleShare() {
     setError('');
     setNotice('');
     try {
       if (navigator.share) {
-        const file = await fetchPdfFile().catch(() => null);
-        if (file && navigator.canShare?.({ files: [file] })) {
-          await navigator.share({ title: shareTitle, text: shareText, files: [file] });
-        } else {
-          await navigator.share({ title: shareTitle, text: shareText });
-        }
+        const [xlsx, pdf] = await Promise.all([fetchFile('xlsx').catch(() => null), fetchFile('pdf').catch(() => null)]);
+        const candidates = [[xlsx, pdf], [xlsx], [pdf]].map((set) => set.filter(Boolean)).filter((set) => set.length);
+        const files = candidates.find((set) => navigator.canShare?.({ files: set }));
+        await navigator.share({ title: shareTitle, text: shareText, ...(files ? { files } : {}) });
         return;
       }
       await navigator.clipboard.writeText(shareText);
-      setNotice('Delen wordt door deze browser niet ondersteund; de opname is gekopieerd. Plak hem in een app naar keuze.');
+      setNotice('Delen wordt door deze browser niet ondersteund; de opname is gekopieerd. Gebruik de knop Excel om het bestand te downloaden.');
     } catch (err) {
       if (err.name !== 'AbortError') setError(`Delen mislukt: ${err.message}`);
     }
@@ -198,10 +229,10 @@ export default function OpnameDetail() {
     }
   }
 
-  async function handleDownload() {
+  async function handleDownload(kind) {
     setError('');
     try {
-      await api.download(`/opnames/${id}/pdf`, 'opname.pdf');
+      await api.download(`/opnames/${id}/${kind}`, `opname.${kind}`);
     } catch (err) {
       setError(err.message);
     }
@@ -247,7 +278,8 @@ export default function OpnameDetail() {
 
       <div className="share-bar">
         <button className="btn-primary" onClick={handleShare}>Delen</button>
-        <button className="btn-secondary" onClick={handleDownload}>PDF</button>
+        <button className="btn-secondary" onClick={() => handleDownload('xlsx')}>Excel</button>
+        <button className="btn-secondary" onClick={() => handleDownload('pdf')}>PDF</button>
         <a className="btn-secondary btn-anchor" target="_blank" rel="noreferrer" href={`https://wa.me/?text=${encodeURIComponent(shareText)}`}>WhatsApp</a>
         <a className="btn-secondary btn-anchor" href={`mailto:?subject=${encodeURIComponent(shareTitle)}&body=${encodeURIComponent(shareText)}`}>E-mail</a>
         <button className="btn-secondary" onClick={handleCopy}>Kopieer</button>
@@ -280,12 +312,14 @@ export default function OpnameDetail() {
 
             <ul className="opname-list">
               {shownProducts.map((p) => {
-                const value = qtyOf(p.id, room);
+                const line = lines.find((l) => l.product_id === p.id && l.room === room);
+                const value = line?.aantal || 0;
                 return (
                   <li key={p.id} className={value ? 'opname-row filled' : 'opname-row'}>
                     <div className="opname-desc">
                       {p.description}
                       <span className="muted small"> &middot; {p.unit}</span>
+                      {line && <RemarkInput line={line} disabled={locked} onSave={setRemark} />}
                     </div>
                     <Qty value={value} disabled={locked} onChange={(n) => setQty(p.id, room, n)} />
                   </li>
@@ -296,6 +330,7 @@ export default function OpnameDetail() {
                   <div className="opname-desc">
                     {l.description}
                     <span className="muted small"> &middot; {l.unit} &middot; extra regel</span>
+                    <RemarkInput line={l} disabled={locked} onSave={setRemark} />
                   </div>
                   <Qty value={l.aantal} disabled={locked} onChange={(n) => setExtraQty(l, n)} />
                 </li>

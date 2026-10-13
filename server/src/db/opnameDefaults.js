@@ -35,7 +35,7 @@ export const DEFAULT_OPNAME_PRODUCTS = [
   ['Freeswerk tbv elektra', '/m1'],
   ['Beltransformator leveren en aanbrengen/vervangen', 'p/st'],
   ['Aansluitsnoer t.b.v. Beltrafo', '/m1'],
-  ['Aanleggen nieuwe leiding en bedrading', 'p/st'],
+  ['Aanleggen nieuwe leiding en bedrading', '/m1'],
   ['Huistelefoon vervangen (hallofoon)', 'p/st'],
   ['Huisbelinstallatie vervangen', 'p/st'],
   ['Huisbel zoemer vervangen', 'p/st'],
@@ -51,7 +51,7 @@ export const DEFAULT_OPNAME_PRODUCTS = [
   ['Leveren en monteren Thermostaat', 'p/st'],
 ];
 
-// Ruimtes zoals de kolommen op het papieren formulier.
+// Ruimtes zoals de kolommen in het Excel-sjabloon van de opdrachtgever (E t/m Q), in dezelfde volgorde.
 export const OPNAME_ROOMS = [
   { key: 'alg', label: 'Algemeen', short: 'alg.' },
   { key: 'wnk', label: 'Woonkamer', short: 'wnk.' },
@@ -66,5 +66,4 @@ export const OPNAME_ROOMS = [
   { key: 'berging', label: 'Berging', short: 'ber.' },
   { key: 'overloop', label: 'Overloop', short: 'overl' },
   { key: 'zolder', label: 'Zolder', short: 'zold' },
-  { key: 'tuin', label: 'Tuin', short: 'tuin' },
 ];

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -10,8 +10,35 @@ function ProductAdmin() {
   const [draft, setDraft] = useState({ description: '', unit: 'p/st' });
   const [error, setError] = useState('');
 
+  const [template, setTemplate] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadResult, setUploadResult] = useState(null);
+  const fileRef = useRef(null);
+
+  const loadTemplate = () => api.get('/opnames/template').then(setTemplate).catch((e) => setError(e.message));
   const load = () => api.get('/opnames/products?all=1').then(setProducts).catch((e) => setError(e.message));
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); loadTemplate(); }, []);
+
+  async function uploadTemplate(e) {
+    e.preventDefault();
+    const file = fileRef.current?.files?.[0];
+    if (!file) return;
+    setError('');
+    setUploadResult(null);
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      setUploadResult(await api.postForm('/opnames/template', formData));
+      fileRef.current.value = '';
+      load();
+      loadTemplate();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setUploading(false);
+    }
+  }
 
   async function add(e) {
     e.preventDefault();
@@ -33,6 +60,30 @@ function ProductAdmin() {
 
   return (
     <div>
+      <h2>Excel-sjabloon van de opdrachtgever</h2>
+      <p className="muted">
+        Upload hun Excel-lijst (Onderaannemerslijst) één keer. De opnamelijst wordt dan gelijkgezet met hun elektraregels, en de knop
+        "Excel" in een opname vult hun eigen bestand in. Het bestand bevat tarieven en blijft op de server; het staat niet in de code.
+      </p>
+      {template && (
+        <p>
+          {template.exists
+            ? `Sjabloon geüpload op ${new Date(template.uploaded_at).toLocaleString('nl-NL')} (${template.linked_products} regels gekoppeld).`
+            : 'Er is nog geen sjabloon geüpload; de Excel-knop maakt nu een eenvoudig eigen overzicht.'}
+        </p>
+      )}
+      {uploadResult && (
+        <div className="alert-warning">
+          Sjabloon verwerkt: {uploadResult.rows} regels gelezen, {uploadResult.created} nieuw, {uploadResult.updated} bijgewerkt,
+          {' '}{uploadResult.deactivated} oude regels uitgeschakeld{uploadResult.kept ? `, ${uploadResult.kept} behouden omdat ze al in een opname staan` : ''}.
+        </div>
+      )}
+      <form className="inline-form" onSubmit={uploadTemplate}>
+        <input type="file" accept=".xlsx" ref={fileRef} required />
+        <div><button type="submit" className="btn-primary" disabled={uploading}>{uploading ? 'Bezig...' : 'Sjabloon uploaden'}</button></div>
+      </form>
+
+      <h2>Regels</h2>
       <p className="muted">Dit zijn de regels die in de opname aanvinkbaar zijn. Uitgeschakelde regels verdwijnen uit nieuwe opnames; bestaande opnames houden ze.</p>
       {error && <div className="alert-error">{error}</div>}
       <form className="inline-form" onSubmit={add}>

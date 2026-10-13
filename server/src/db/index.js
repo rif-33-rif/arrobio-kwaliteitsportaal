@@ -38,6 +38,13 @@ if (!userColumns.includes('mfa_enabled')) {
   db.exec('ALTER TABLE users ADD COLUMN mfa_enabled INTEGER NOT NULL DEFAULT 0');
 }
 
+// Opnamemodule: kolommen die na de eerste release zijn toegevoegd.
+const opnameProductColumns = db.prepare('PRAGMA table_info(opname_products)').all().map((c) => c.name);
+if (!opnameProductColumns.includes('template_row')) db.exec('ALTER TABLE opname_products ADD COLUMN template_row INTEGER');
+if (!opnameProductColumns.includes('template_section')) db.exec('ALTER TABLE opname_products ADD COLUMN template_section TEXT');
+const opnameLineColumns = db.prepare('PRAGMA table_info(opname_lines)').all().map((c) => c.name);
+if (!opnameLineColumns.includes('remark')) db.exec('ALTER TABLE opname_lines ADD COLUMN remark TEXT');
+
 // Eerste keer: vul de opnamelijst met de regels van het papieren formulier.
 if (db.prepare('SELECT COUNT(*) AS c FROM opname_products').get().c === 0) {
   const insert = db.prepare('INSERT INTO opname_products (description, unit, sort_order) VALUES (?, ?, ?)');

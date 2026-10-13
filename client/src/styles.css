@@ -282,3 +282,6 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--lime); outl
 
 /* Voorkom dat brede inhoud (ruimte-balk, tabellen) de hele pagina breder maakt dan het scherm. */
 .app-content { min-width: 0; }
+
+.remark-input { display: block; width: 100%; margin-top: 0.35rem; padding: 0.3rem 0.5rem; font-size: 0.82rem; border-color: transparent; background: rgba(0,0,0,0.04); }
+.remark-input:focus, .remark-input:not(:placeholder-shown) { background: white; border-color: var(--border); }

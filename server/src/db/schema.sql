@@ -318,6 +318,8 @@ CREATE TABLE IF NOT EXISTS opname_products (
   unit TEXT NOT NULL DEFAULT 'p/st',
   sort_order INTEGER NOT NULL DEFAULT 0,
   active INTEGER NOT NULL DEFAULT 1,
+  template_row INTEGER,
+  template_section TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -344,6 +346,7 @@ CREATE TABLE IF NOT EXISTS opname_lines (
   unit TEXT,
   room TEXT NOT NULL,
   aantal REAL NOT NULL,
+  remark TEXT,
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_opname_lines_opname ON opname_lines(opname_id);

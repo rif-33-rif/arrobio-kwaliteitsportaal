@@ -285,3 +285,11 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--lime); outl
 
 .remark-input { display: block; width: 100%; margin-top: 0.35rem; padding: 0.3rem 0.5rem; font-size: 0.82rem; border-color: transparent; background: rgba(0,0,0,0.04); }
 .remark-input:focus, .remark-input:not(:placeholder-shown) { background: white; border-color: var(--border); }
+
+/* Naam en "Uitloggen" in de donkere kopbalk waren donker op donker en dus onzichtbaar. */
+.app-user .btn-link { color: white; }
+
+@media (max-width: 480px) {
+  .app-title-sub, .role-pill { display: none; }
+  .app-user { gap: 0.5rem; font-size: 0.8rem; flex-wrap: wrap; justify-content: flex-end; }
+}

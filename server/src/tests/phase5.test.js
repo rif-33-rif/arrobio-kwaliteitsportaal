@@ -62,6 +62,13 @@ test('beveiligingsheaders (helmet) staan op elke response', async () => {
   assert.equal(res.headers.get('x-content-type-options'), 'nosniff');
 });
 
+test('CSP staat blob:-afbeeldingen toe, anders laden foto\'s in het dossier niet', async () => {
+  const res = await fetch(`${baseUrl}/api/health`);
+  const csp = res.headers.get('content-security-policy');
+  assert.match(csp, /img-src [^;]*'self'[^;]*blob:/);
+  assert.match(csp, /script-src 'self'/); // overige beveiliging blijft strak
+});
+
 test('onbekend API-endpoint geeft een nette 404, geen onbehandelde crash', async () => {
   const res = await fetch(`${baseUrl}/api/dit-bestaat-niet`);
   assert.equal(res.status, 404);

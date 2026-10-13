@@ -36,7 +36,16 @@ export function createApp() {
   const app = express();
 
   // Beveiligingsheaders en basis rate-limiting (sectie 27 van de bouwopdracht).
-  app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
+  // Foto's worden met het inlogtoken opgehaald en als blob: getoond (PhotosTab); de standaard
+  // CSP van helmet staat alleen 'self' en data: toe en blokkeerde daardoor alle foto's.
+  app.use(
+    helmet({
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+      contentSecurityPolicy: {
+        directives: { ...helmet.contentSecurityPolicy.getDefaultDirectives(), 'img-src': ["'self'", 'data:', 'blob:'] },
+      },
+    })
+  );
   app.use(cors());
   app.use(express.json({ limit: '2mb' }));
   app.use(
